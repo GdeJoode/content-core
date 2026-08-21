@@ -57,6 +57,35 @@ def format_timestamp(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
+def _allow_full_torch_load() -> None:
+    """Make ``torch.load`` default to ``weights_only=False`` for this process.
+
+    PyTorch 2.6 flipped ``torch.load``'s ``weights_only`` default to ``True``,
+    which rejects the pickled objects (e.g. ``omegaconf.ListConfig``) inside the
+    pyannote VAD and alignment checkpoints that WhisperX loads, raising an
+    ``UnpicklingError``. These checkpoints come from the official, trusted
+    WhisperX/pyannote model repos, so we restore the pre-2.6 behaviour by
+    defaulting ``weights_only`` back to ``False``. The patch is idempotent and a
+    no-op on older PyTorch versions.
+    """
+    try:
+        import torch
+    except ImportError:  # pragma: no cover - torch ships with whisperx
+        return
+
+    if getattr(torch.load, "_full_load_patched", False):
+        return
+
+    original_load = torch.load
+
+    def _patched_load(*args, **kwargs):
+        kwargs.setdefault("weights_only", False)
+        return original_load(*args, **kwargs)
+
+    _patched_load._full_load_patched = True
+    torch.load = _patched_load
+
+
 def transcribe_video(
     input_path: Path,
     model_size: str,
@@ -91,6 +120,8 @@ def transcribe_video(
             "WhisperX is not installed. Install it with:\n"
             '    pip install whisperx "scenedetect[opencv]"'
         ) from exc
+
+    _allow_full_torch_load()
 
     logger.info(f"Loading WhisperX model '{model_size}' on {device} ({compute_type})")
     model = whisperx.load_model(
