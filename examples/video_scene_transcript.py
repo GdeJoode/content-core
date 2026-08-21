@@ -27,23 +27,25 @@ Usage:
 """
 
 import argparse
-import sys
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from loguru import logger
+logger = logging.getLogger("video_scene_transcript")
 
 
 def setup_logging(verbose: bool = False) -> None:
-    """Configure loguru for console output."""
-    logger.remove()
-    logger.add(
-        sys.stderr,
-        format=(
-            "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | "
-            "<level>{message}</level>"
-        ),
-        level="DEBUG" if verbose else "INFO",
+    """Configure console logging using the Python standard library.
+
+    Uses only stdlib ``logging`` so the script stays dependency-free apart from
+    WhisperX and PySceneDetect, which makes it easy to run in throwaway
+    environments such as Google Colab.
+    """
+    logging.basicConfig(
+        level=logging.DEBUG if verbose else logging.INFO,
+        format="%(asctime)s | %(levelname)-8s | %(message)s",
+        datefmt="%H:%M:%S",
+        force=True,
     )
 
 
@@ -322,7 +324,7 @@ def process_video(
 
     output_md = output_dir / f"{input_path.stem}.md"
     output_md.write_text(markdown, encoding="utf-8")
-    logger.success(f"Wrote {output_md} ({len(scenes)} scenes)")
+    logger.info(f"Wrote {output_md} ({len(scenes)} scenes)")
     return output_md
 
 
