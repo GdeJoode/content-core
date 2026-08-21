@@ -40,13 +40,21 @@ def setup_logging(verbose: bool = False) -> None:
     Uses only stdlib ``logging`` so the script stays dependency-free apart from
     WhisperX and PySceneDetect, which makes it easy to run in throwaway
     environments such as Google Colab.
+
+    ``verbose`` only raises the detail of *this* script's own logs. Third-party
+    libraries (torchaudio/torio, matplotlib, jax, huggingface_hub, ...) are kept
+    at WARNING so their debug chatter - including harmless FFmpeg-probing
+    tracebacks - does not drown out the pipeline's progress messages.
     """
     logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.INFO,
+        level=logging.WARNING,
         format="%(asctime)s | %(levelname)-8s | %(message)s",
         datefmt="%H:%M:%S",
         force=True,
     )
+    # Our own logger is the only one turned up; the root stays at WARNING so
+    # noisy dependencies remain quiet regardless of the --verbose flag.
+    logger.setLevel(logging.DEBUG if verbose else logging.INFO)
 
 
 def format_timestamp(seconds: float) -> str:
@@ -79,7 +87,11 @@ def _allow_full_torch_load() -> None:
     original_load = torch.load
 
     def _patched_load(*args, **kwargs):
-        kwargs.setdefault("weights_only", False)
+        # Force full loading even when the caller passes weights_only=True
+        # explicitly (pyannote/Lightning do this), so a plain setdefault is not
+        # enough - we override it. These checkpoints come from trusted WhisperX
+        # model repos.
+        kwargs["weights_only"] = False
         return original_load(*args, **kwargs)
 
     _patched_load._full_load_patched = True
