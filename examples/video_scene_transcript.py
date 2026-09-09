@@ -135,6 +135,10 @@ def transcribe_video(
 
     _allow_full_torch_load()
 
+    # Whisper/faster-whisper expects lowercase ISO codes (e.g. "nl", not "NL").
+    if language:
+        language = language.strip().lower()
+
     logger.info(f"Loading WhisperX model '{model_size}' on {device} ({compute_type})")
     model = whisperx.load_model(
         model_size, device, compute_type=compute_type, language=language
